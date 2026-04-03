@@ -74,7 +74,7 @@ if "lang" not in st.session_state:
     st.session_state.lang = "en"
 
 # ========================== DATA & CACHE ==========================
-DATA_DIR = Path(r"C:\Users\patri\baseball_2025_data")
+DATA_DIR = Path(".")
 
 @st.cache_data(ttl=3600)
 def load_data():
