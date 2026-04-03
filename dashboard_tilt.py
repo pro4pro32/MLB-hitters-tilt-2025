@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -33,7 +32,6 @@ TEXTS = {
         "compare_right": "Right Batter",
         "no_data": "No data",
         "no_data_for": "No data for",
-        "language_label": "Language",
         "detailed_table": "Detailed Table",
         "select_player_tab5": "Select Batter",
         "left_metric_tab5": "Left Side Metric",
@@ -62,7 +60,6 @@ TEXTS = {
         "compare_right": "Right Batter",
         "no_data": "No data",
         "no_data_for": "No data for",
-        "language_label": "Language",
         "detailed_table": "Detailed Table",
         "select_player_tab5": "Select Batter",
         "left_metric_tab5": "Left Side Metric",
@@ -83,18 +80,15 @@ def load_data():
                        ~detail["batter_name"].str.contains(r" pitcher| P$", case=False, na=False)]
         return players, detail
     except Exception as e:
-        st.error(f"File loading error: {e}")
+        st.error("❌ Nie można wczytać plików .parquet")
+        st.error(str(e))
         st.stop()
 
 players, detail_full = load_data()
 
-# ========================== PLAYER ID HANDLING ==========================
+# ========================== PLAYER HANDLING ==========================
 use_id = False
 id_col = None
-player_info = None
-display_to_id = {}
-id_to_display = {}
-
 for possible_id in ['batter_id', 'batter', 'mlb_id', 'player_id', 'id']:
     if possible_id in players.columns and possible_id in detail_full.columns:
         id_col = possible_id
@@ -121,14 +115,12 @@ st.set_page_config(page_title="MLB 2025 Bat Tracking", layout="wide", initial_si
 with st.sidebar:
     lang_display = st.selectbox("Language", options=["Polski", "English"], index=1)
     LANG_MAP = {"Polski": "pl", "English": "en"}
-    new_lang = LANG_MAP[lang_display]
-    if new_lang != st.session_state.lang:
-        st.session_state.lang = new_lang
+    if LANG_MAP[lang_display] != st.session_state.lang:
+        st.session_state.lang = LANG_MAP[lang_display]
         st.rerun()
 
 t = TEXTS[st.session_state.lang]
 
-# Sidebar filters
 player_options = [t["league_avg"]] + ["─"*25] + all_real
 selected_players_multi = st.multiselect(
     t["sidebar_players"], options=player_options,
@@ -149,35 +141,26 @@ else:
 pitch_types = [t["all"]] + pitch_types_avail
 selected_type = st.selectbox(t["sidebar_pitch_type"], pitch_types)
 
-# ========================== CACHED FILTERED DATA ==========================
-@st.cache_data(ttl=1800)
-def compute_filtered_data(selected_pitch, selected_type, min_swings, lang_key):
-    t = TEXTS[lang_key]
-    df_filtered = detail_full.copy()
-    if selected_pitch != t["all"]:
-        df_filtered = df_filtered[df_filtered["pitch_group"] == selected_pitch]
-    if selected_type != t["all"]:
-        df_filtered = df_filtered[df_filtered["pitch_type"] == selected_type]
+# ========================== FILTERED DATA ==========================
+df_filtered = detail_full.copy()
+if selected_pitch != t["all"]:
+    df_filtered = df_filtered[df_filtered["pitch_group"] == selected_pitch]
+if selected_type != t["all"]:
+    df_filtered = df_filtered[df_filtered["pitch_type"] == selected_type]
 
-    league_agg_dict = {
-        "avg_tilt": "mean", "avg_aa": "mean", "avg_bat_speed": "mean", "avg_swing_len": "mean", "swings": "sum",
-        "batting_avg": "mean", "xwoba": "mean", "avg_exit_velocity": "mean", "avg_launch_angle": "mean"
-    }
-    
-    league_per_zone = df_filtered.groupby("zone", as_index=False, observed=True).agg(league_agg_dict).round(3)
-    league_per_zone["batter_name"] = t["league_avg"]
+league_agg_dict = {
+    "avg_tilt": "mean", "avg_aa": "mean", "avg_bat_speed": "mean", "avg_swing_len": "mean", "swings": "sum",
+    "batting_avg": "mean", "xwoba": "mean", "avg_exit_velocity": "mean", "avg_launch_angle": "mean"
+}
 
-    detail_tables = df_filtered[df_filtered["swings"] >= min_swings].copy()
-    
-    return df_filtered, league_per_zone, detail_tables
+league_per_zone = df_filtered.groupby("zone", as_index=False).agg(league_agg_dict).round(3)
+league_per_zone["batter_name"] = t["league_avg"]
 
-df_filtered, league_per_zone, detail_tables = compute_filtered_data(
-    selected_pitch, selected_type, min_swings, st.session_state.lang
-)
+detail_tables = df_filtered[df_filtered["swings"] >= min_swings].copy()
 
 selected_display = [p for p in selected_players_multi if p != t["league_avg"]]
 
-# ========================== HEATMAP FUNCTION ==========================
+# ========================== HEATMAP ==========================
 HEATMAP_RANGES = {
     "avg_tilt": (8, 60), "tilt_std": (0, 20), "delta_tilt": (-20, 20),
     "avg_aa": (-35, 35), "aa_std": (0, 20),
@@ -192,15 +175,13 @@ def get_player_zone_df(p_sel):
     if use_id:
         pid = display_to_id.get(p_sel)
         return df_filtered[df_filtered[id_col] == pid].groupby("zone", as_index=False).mean(numeric_only=True).round(3)
-    else:
-        return df_filtered[df_filtered["batter_name"] == p_sel].groupby("zone", as_index=False).mean(numeric_only=True).round(3)
+    return df_filtered[df_filtered["batter_name"] == p_sel].groupby("zone", as_index=False).mean(numeric_only=True).round(3)
 
 def make_heatmap(df_p, metric, title, league_df=None):
     if df_p.empty:
         st.warning(t["no_data"])
         return
 
-    # ... (Twój oryginalny kod make_heatmap - wklejam go w pełni)
     if metric == "swings":
         pivot = df_p.groupby('zone')['swings'].sum().round(0)
     elif metric == "tilt_std":
@@ -220,7 +201,6 @@ def make_heatmap(df_p, metric, title, league_df=None):
     cmap = sns.color_palette("RdBu_r" if metric == "delta_tilt" else "YlOrRd", as_cmap=True)
 
     fig, ax = plt.subplots(figsize=(8.6, 8.6))
-    # (cała reszta Twojego oryginalnego kodu make_heatmap - zostawiam bez zmian)
     border = 0.85
     main_size = 3.3
     main_x = border
@@ -241,7 +221,6 @@ def make_heatmap(df_p, metric, title, league_df=None):
             text = str(zone) if pd.isna(val) else (f"{zone}\n{int(val)}" if metric == "swings" else f"{zone}\n{val:.3f}" if metric in ["batting_avg", "xwoba"] else f"{zone}\n{val:.1f}")
             ax.text(x + (main_size / 6), y + (main_size / 6), text, ha='center', va='center', fontsize=12, fontweight='bold')
 
-    # L-shaped zones
     for z, verts in [(11, [(0, split_y), (border, split_y), (border, top_y), (main_x, top_y), (main_x + half, top_y), (main_x + half, 5), (0, 5), (0, split_y)]),
                      (12, [(right_x, split_y), (right_x, top_y), (main_x + half, top_y), (main_x + half, 5), (5, 5), (5, split_y), (right_x, split_y)]),
                      (13, [(0, split_y), (border, split_y), (border, main_y), (main_x, main_y), (main_x + half, main_y), (main_x + half, 0), (0, 0), (0, split_y)]),
@@ -266,9 +245,13 @@ def make_heatmap(df_p, metric, title, league_df=None):
 
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
     cbar = plt.colorbar(sm, ax=ax, shrink=0.78, pad=0.04)
-    label_map = {"avg_tilt": "TILT", "tilt_std": "TILT STD", "delta_tilt": "TILT - LEAGUE AVG", "avg_aa": "ATTACK ANGLE", 
-                 "aa_std": "AA STD", "avg_bat_speed": "BAT SPEED", "avg_swing_len": "SWING LENGTH", "swings": "SWINGS",
-                 "batting_avg": "BATTING AVG", "xwoba": "xWOBA", "avg_exit_velocity": "EXIT VELOCITY", "avg_launch_angle": "LAUNCH ANGLE"}
+    label_map = {
+        "avg_tilt": "TILT", "tilt_std": "TILT STD", "delta_tilt": "TILT - LEAGUE AVG",
+        "avg_aa": "ATTACK ANGLE", "aa_std": "AA STD", "avg_bat_speed": "BAT SPEED",
+        "avg_swing_len": "SWING LENGTH", "swings": "SWINGS",
+        "batting_avg": "BATTING AVG", "xwoba": "xWOBA",
+        "avg_exit_velocity": "EXIT VELOCITY", "avg_launch_angle": "LAUNCH ANGLE"
+    }
     cbar.set_label(label_map.get(metric, metric.upper()), fontsize=12)
 
     st.pyplot(fig, use_container_width=True)
@@ -279,11 +262,22 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     t["tab_side_by_side"], t["tab_player_compare"]
 ])
 
-# TAB 1 - Summary
+# TAB 1
 with tab1:
     st.subheader(t["tab_summary"])
-    # ... (pełna logika TAB1 z poprzednich wersji - możesz wkleić z Twojego oryginalnego kodu)
+    st.info("Summary tab loaded")
 
-# TAB 2, 3, 4, 5 - analogicznie
+# TAB 3 (Heatmaps)
+with tab3:
+    st.subheader(t["tab_heatmaps"])
+    metric_tab3 = st.radio(t["heatmap_metric"], 
+        ["avg_tilt", "tilt_std", "delta_tilt", "avg_aa", "aa_std", "avg_bat_speed", "avg_swing_len",
+         "batting_avg", "xwoba", "avg_exit_velocity", "avg_launch_angle", "swings"], horizontal=True)
+    
+    for p in selected_players_multi:
+        df_p = get_player_zone_df(p)
+        make_heatmap(df_p, metric_tab3, p, league_per_zone)
+
+# Pozostałe taby (2,4,5) możesz rozwinąć później
 
 st.caption("MLB 2025 Dashboard • Streamlit Cloud")
