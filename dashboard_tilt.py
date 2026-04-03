@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.path import Path as MPath
 from matplotlib.patches import PathPatch
-from pathlib import Path
 
 # ========================== TRANSLATIONS ==========================
 TEXTS = {
@@ -137,7 +136,7 @@ else:
 pitch_types = [t["all"]] + pitch_types_avail
 selected_type = st.selectbox(t["sidebar_pitch_type"], pitch_types)
 
-# ========================== CACHED DATA ==========================
+# ========================== FILTERED DATA (z cache) ==========================
 @st.cache_data(ttl=1800)
 def get_filtered_data(selected_pitch, selected_type, min_swings, lang_key):
     t = TEXTS[lang_key]
@@ -148,11 +147,10 @@ def get_filtered_data(selected_pitch, selected_type, min_swings, lang_key):
         df = df[df["pitch_type"] == selected_type]
 
     league_agg_dict = {
-        "avg_tilt": "mean", "avg_aa": "mean", "avg_bat_speed": "mean", "avg_swing_len": "mean", 
-        "swings": "sum", "batting_avg": "mean", "xwoba": "mean", 
-        "avg_exit_velocity": "mean", "avg_launch_angle": "mean"
+        "avg_tilt": "mean", "avg_aa": "mean", "avg_bat_speed": "mean", "avg_swing_len": "mean", "swings": "sum",
+        "batting_avg": "mean", "xwoba": "mean", "avg_exit_velocity": "mean", "avg_launch_angle": "mean"
     }
-    league_per_zone = df.groupby("zone", as_index=False).agg(league_agg_dict).round(3)
+    league_per_zone = df.groupby("zone", as_index=False, observed=True).agg(league_agg_dict).round(3)
     league_per_zone["batter_name"] = t["league_avg"]
 
     detail_tables = df[df["swings"] >= min_swings].copy()
@@ -164,7 +162,7 @@ df_filtered, league_per_zone, detail_tables = get_filtered_data(
 
 selected_display = [p for p in selected_players_multi if p != t["league_avg"]]
 
-# ========================== HEATMAP FUNCTIONS ==========================
+# ========================== HEATMAP ==========================
 HEATMAP_RANGES = {
     "avg_tilt": (8, 60), "tilt_std": (0, 20), "delta_tilt": (-20, 20),
     "avg_aa": (-35, 35), "aa_std": (0, 20),
@@ -184,7 +182,7 @@ def get_player_zone_df(p_sel):
 
 def make_heatmap(df_p, metric, title, league_df=None):
     if df_p is None or df_p.empty:
-        st.warning(t["no_data"])
+        st.warning("No data")
         return
 
     if metric == "swings":
@@ -195,7 +193,7 @@ def make_heatmap(df_p, metric, title, league_df=None):
         pivot = df_p.groupby('zone')['avg_aa'].std(ddof=1).round(1)
     elif metric == "delta_tilt":
         player_mean = df_p.groupby('zone')['avg_tilt'].mean().round(2)
-        league_tilt = league_df.set_index('zone')['avg_tilt'] if league_df is not None else pd.Series()
+        league_tilt = league_df.set_index('zone')['avg_tilt'] if league_df is not None and not league_df.empty else pd.Series()
         pivot = (player_mean - league_tilt.reindex(player_mean.index, fill_value=np.nan)).round(2)
     elif metric in ["batting_avg", "xwoba"]:
         pivot = df_p.groupby('zone')[metric].mean().round(3)
@@ -270,8 +268,80 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # TAB 1 - Summary
 with tab1:
     st.subheader(t["tab_summary"])
-    # ... (wklej resztę kodu TAB1 z Twojego oryginalnego pliku)
+    if selected_players_multi:
+        st.markdown(t["selected_players"])
+        player_filter_col = id_col if use_id else "batter_name"
+        player_filter_values = [display_to_id.get(p) for p in selected_display if p in display_to_id] if use_id else selected_display
 
-# TAB 2, TAB 3, TAB 4, TAB 5 — wklej resztę z Twojego oryginalnego kodu
+        sel_df = detail_tables[detail_tables[player_filter_col].isin(player_filter_values)].copy() if player_filter_values else pd.DataFrame()
+
+        if use_id and not sel_df.empty:
+            sel_summary = sel_df.groupby(id_col).agg({
+                "avg_tilt":"mean", "avg_aa":"mean", "avg_bat_speed":"mean", "avg_swing_len":"mean", "swings":"sum",
+                "batting_avg":"mean", "xwoba":"mean", "avg_exit_velocity":"mean", "avg_launch_angle":"mean"
+            }).round(3).reset_index()
+            sel_summary["batter_name"] = sel_summary[id_col].map(id_to_display)
+            sel_summary = sel_summary[["batter_name", "avg_tilt", "avg_aa", "avg_bat_speed", "avg_swing_len", "swings",
+                                       "batting_avg", "xwoba", "avg_exit_velocity", "avg_launch_angle"]]
+        else:
+            sel_summary = sel_df.groupby("batter_name").agg({
+                "avg_tilt":"mean", "avg_aa":"mean", "avg_bat_speed":"mean", "avg_swing_len":"mean", "swings":"sum",
+                "batting_avg":"mean", "xwoba":"mean", "avg_exit_velocity":"mean", "avg_launch_angle":"mean"
+            }).round(3).reset_index()
+
+        if t["league_avg"] in selected_players_multi and not detail_tables.empty:
+            la = detail_tables.mean(numeric_only=True).round(3).to_frame().T
+            la["batter_name"] = t["league_avg"]
+            la["swings"] = detail_tables["swings"].sum()
+            sel_summary = pd.concat([sel_summary, la[sel_summary.columns]], ignore_index=True)
+
+        st.dataframe(sel_summary.sort_values("swings", ascending=False), use_container_width=True, hide_index=True)
+        st.markdown("---")
+
+    st.subheader(t["all_players_after_filters"])
+    if not detail_tables.empty:
+        if use_id:
+            all_summary = detail_tables.groupby(id_col).agg({
+                "avg_tilt":"mean", "avg_aa":"mean", "avg_bat_speed":"mean", "avg_swing_len":"mean", "swings":"sum",
+                "batting_avg":"mean", "xwoba":"mean", "avg_exit_velocity":"mean", "avg_launch_angle":"mean"
+            }).round(3).reset_index()
+            all_summary["batter_name"] = all_summary[id_col].map(id_to_display)
+            all_summary = all_summary[["batter_name", "avg_tilt", "avg_aa", "avg_bat_speed", "avg_swing_len", "swings",
+                                       "batting_avg", "xwoba", "avg_exit_velocity", "avg_launch_angle"]]
+        else:
+            all_summary = detail_tables.groupby("batter_name").agg({
+                "avg_tilt":"mean", "avg_aa":"mean", "avg_bat_speed":"mean", "avg_swing_len":"mean", "swings":"sum",
+                "batting_avg":"mean", "xwoba":"mean", "avg_exit_velocity":"mean", "avg_launch_angle":"mean"
+            }).round(3).reset_index()
+
+        st.dataframe(all_summary.sort_values("swings", ascending=False), use_container_width=True, hide_index=True)
+
+# TAB 2 - Group Comparison
+with tab2:
+    st.subheader(t["tab_groups"])
+    if not selected_display:
+        st.info(t["no_real_player"])
+    elif df_filtered.empty:
+        st.info(t["no_data_after_filters"])
+    else:
+        metric = st.selectbox(t["metric"], ["avg_tilt", "avg_aa", "avg_bat_speed", "avg_swing_len",
+                                            "batting_avg", "xwoba", "avg_exit_velocity", "avg_launch_angle", "swings"])
+
+        temp_df = df_filtered[df_filtered[player_filter_col if 'player_filter_col' in locals() else "batter_name"].isin(player_filter_values if 'player_filter_values' in locals() else selected_display)].copy()
+        if use_id and not temp_df.empty:
+            temp_df["player_display"] = temp_df[id_col].map(id_to_display)
+        else:
+            temp_df["player_display"] = temp_df["batter_name"]
+
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_box = px.box(temp_df, x="pitch_group", y=metric, color="player_display", points="outliers", title="Distribution")
+            st.plotly_chart(fig_box, use_container_width=True)
+        with col2:
+            avg_data = temp_df.groupby(["player_display", "pitch_group"], as_index=False)[metric].mean()
+            fig_bar = px.bar(avg_data, x="pitch_group", y=metric, color="player_display", barmode="group", title="Average Value")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+# TAB 3, 4, 5 — wklej resztę z Twojego oryginalnego kodu jeśli chcesz pełną funkcjonalność
 
 st.caption("MLB 2025 Dashboard • Optimized for Streamlit Cloud")
