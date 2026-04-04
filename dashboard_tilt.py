@@ -89,10 +89,14 @@ with st.sidebar:
 
 t = TEXTS[st.session_state.lang]
 
+
 # =====================================================================
 # DATA LOADING
 # =====================================================================
-DATA_DIR = "."
+DATA_DIR = Path(".")
+
+import os
+st.write("FILES IN ROOT:", os.listdir())  # 👈 WSTAW TO TUTAJ
 
 @st.cache_data
 def load_data():
