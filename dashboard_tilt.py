@@ -95,13 +95,10 @@ t = TEXTS[st.session_state.lang]
 # =====================================================================
 DATA_DIR = Path(".")
 
-import os
-st.write("FILES IN ROOT:", os.listdir())  # 👈 WSTAW TO TUTAJ
-
 @st.cache_data
 def load_data():
-    players = pd.read_parquet(Path(DATA_DIR) / "players_summary_2025.csv")
-    detail = pd.read_parquet(Path(DATA_DIR) / "detail_zone_pitchgroup_2025.csv")
+    players = pd.read_csv(Path(DATA_DIR) / "players_summary_2025.csv")
+    detail = pd.read_csv(Path(DATA_DIR) / "detail_zone_pitchgroup_2025.csv")
     detail = detail[detail["batter_name"].notna() & ~detail["batter_name"].str.contains(r" pitcher| P$", case=False, na=False)]
     return players, detail
 
