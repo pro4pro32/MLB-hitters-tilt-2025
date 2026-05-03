@@ -192,8 +192,8 @@ t = TEXTS[st.session_state.lang]
 # ─────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner="⚾ Loading Statcast data …")
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    players = pd.read_parquet(Path(DATA_DIR) / "players_summary_2025.parquet")
-    detail  = pd.read_parquet(Path(DATA_DIR) / "detail_zone_pitchgroup_2025.parquet")
+    players = pd.read_csv(Path(DATA_DIR) / "players_summary_2025.csv")
+    detail  = pd.read_csv(Path(DATA_DIR) / "detail_zone_pitchgroup_2025.csv")
     mask = (
         detail["batter_name"].notna()
         & ~detail["batter_name"].str.contains(
