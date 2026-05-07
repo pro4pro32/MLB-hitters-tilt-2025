@@ -1,9 +1,13 @@
-streamlit
-pandas
-numpy
-plotly
-matplotlib
-seaborn
-pyarrow
-scipy
-scikit-learn
+# MLB Swing Analytics Dashboard v2.0 – Dependencies
+# Install with: pip install -r requirements.txt
+
+streamlit>=1.35.0
+pandas>=2.0.0
+numpy>=1.26.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.20.0
+scikit-learn>=1.4.0
+scipy>=1.12.0
+# Optional – enables GAM model instead of Gradient Boosting:
+# pygam>=0.9.0
