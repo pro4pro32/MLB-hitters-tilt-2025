@@ -113,11 +113,20 @@ def _clean(df, *cols):
     existing = list(dict.fromkeys(c for c in cols if c in df.columns))
     return df[existing].copy()
 
+try:
+    import statsmodels  # noqa
+    HAS_STATSMODELS = True
+except ImportError:
+    HAS_STATSMODELS = False
+
 def _safe_scatter(df, x, y, color=None, size=None, hover_data=None,
                   trendline=None, labels=None, title=""):
-    """Returns None when x==y; otherwise passes a clean subset to px.scatter."""
+    """Returns None when x==y; drops trendline if statsmodels missing."""
     if x == y:
         return None
+    # trendline="lowess"/"ols" both require statsmodels
+    if trendline and not HAS_STATSMODELS:
+        trendline = None
     cols = [c for c in [x,y,color,size]+(hover_data or []) if c]
     hd   = [c for c in (hover_data or []) if c not in (x,y)]
     return px.scatter(_clean(df,*cols), x=x, y=y, color=color, size=size,
