@@ -599,7 +599,9 @@ with tab7:
             return "background-color:#e0ffe8"
         fmt={"Current Tilt":"{:.1f}°","Optimal Tilt (raw)":"{:.1f}°","Optimal Tilt":"{:.1f}°",
              "Δ Tilt":"{:+.1f}°","Pred. xwOBA @ Opt.":"{:.3f}","Current xwOBA":"{:.3f}","Confidence":"{:.0%}"}
-        st.dataframe(tb.style.applymap(_cd,subset=["Δ Tilt"]).format(fmt),use_container_width=True,hide_index=True)
+        # pandas ≥ 2.1: Styler.applymap → Styler.map
+        _styler = tb.style.map(_cd, subset=["Δ Tilt"]) if hasattr(tb.style, "map") else tb.style.applymap(_cd, subset=["Δ Tilt"])
+        st.dataframe(_styler.format(fmt), use_container_width=True, hide_index=True)
         st.markdown("#### Δ Tilt – Top 30 by |Δ|")
         t30=tb.assign(_a=tb["Δ Tilt"].abs()).nlargest(30,"_a")
         f7=px.bar(_clean(t30,"Δ Tilt","Batter","Current Tilt","Optimal Tilt","Confidence","Swings"),
