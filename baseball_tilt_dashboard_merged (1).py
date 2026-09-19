@@ -864,8 +864,35 @@ with tab_rank:
         fig_rank.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
         st.plotly_chart(fig_rank, width="stretch")
 
-        if "Current xwOBA" in tbl.columns and tbl["Current xwOBA"].notna().any():
+                if "Current xwOBA" in tbl.columns and tbl["Current xwOBA"].notna().any():
             st.markdown('<div class="section-hdr">Current xwOBA vs Δ Tilt</div>', unsafe_allow_html=True)
             sd = tbl.dropna(subset=["Current xwOBA"])
-            fig_rx = px.scatter(sd, x="Δ Tilt", y="Current xwOBA", color="Confidence", size="Swings")
-                hover_data=["Batter","Optimal Tilt","Current Tilt"],
+            fig_rx = px.scatter(
+                sd,
+                x="Δ Tilt",
+                y="Current xwOBA",
+                color="Confidence",
+                size="Swings",
+                hover_data=["Batter", "Optimal Tilt", "Current Tilt"],
+                title="Do batters nearer their optimal tilt perform better?"
+            )
+            fig_rx.add_vline(x=0, line_dash="dash", line_color="#8b949e")
+            fig_rx = styled_fig(fig_rx, 430)
+            st.plotly_chart(fig_rx, width="stretch")
+
+        if "Gradient Boosting" in model_type and hasattr(model, "feature_importances_"):
+            st.markdown('<div class="section-hdr">Model Feature Importance</div>', unsafe_allow_html=True)
+            imp = pd.Series(model.feature_importances_, index=FEATURE_COLS).sort_values()
+            fig_imp = px.bar(
+                imp.reset_index(),
+                x=0,
+                y="index",
+                orientation="h",
+                labels={"0": "Importance", "index": "Feature"},
+                color=0,
+                color_continuous_scale="Oranges",
+                title="Gradient Boosting — Feature Importance"
+            )
+            fig_imp = styled_fig(fig_imp, 360)
+            fig_imp.update_layout(coloraxis_showscale=False)
+            st.plotly_chart(fig_imp, width="stretch")
