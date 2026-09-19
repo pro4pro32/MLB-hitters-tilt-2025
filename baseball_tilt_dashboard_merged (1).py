@@ -867,5 +867,5 @@ with tab_rank:
         if "Current xwOBA" in tbl.columns and tbl["Current xwOBA"].notna().any():
             st.markdown('<div class="section-hdr">Current xwOBA vs Δ Tilt</div>', unsafe_allow_html=True)
             sd = tbl.dropna(subset=["Current xwOBA"])
-            fig_rx = px.scatter(sd, x="Δ Tilt", y="Current xwOBA", color="Confidence", size="Swings",
+            fig_rx = px.scatter(sd, x="Δ Tilt", y="Current xwOBA", color="Confidence", size="Swings")
                 hover_data=["Batter","Optimal Tilt","Current Tilt"],
